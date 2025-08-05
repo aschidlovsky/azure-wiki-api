@@ -10,7 +10,7 @@ class AzureDevOpsWikiTool:
         org: Optional[str] = None,
         project: Optional[str] = None,
         pat: Optional[str] = None,
-        api_version: str = "7.1-preview.1",  # CHANGED HERE
+        api_version: str = "7.1-preview.1",
     ) -> None:
         self.org = org or os.getenv("AZURE_DEVOPS_ORG")
         self.project = project or os.getenv("AZURE_DEVOPS_PROJECT")
@@ -34,10 +34,12 @@ class AzureDevOpsWikiTool:
     def _request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         headers = kwargs.pop("headers", {})
         merged_headers = {**self._headers, **headers}
+        params = kwargs.pop("params", None)
         print(f"DEBUG: Calling Azure DevOps URL: {url}")
         print(f"DEBUG: Method: {method}")
         print(f"DEBUG: Org: {self.org}, Project: {self.project}, PAT Set: {bool(self.pat)}")
-        response = requests.request(method, url, headers=merged_headers, **kwargs)
+        print(f"DEBUG: Params: {params}")
+        response = requests.request(method, url, headers=merged_headers, params=params, **kwargs)
         print(f"DEBUG: Response status: {response.status_code}")
         if response.status_code != 200:
             print("DEBUG: Response content (first 500 chars):", response.text[:500])
@@ -50,19 +52,22 @@ class AzureDevOpsWikiTool:
             ) from exc
 
     def list_wikis(self) -> List[Dict[str, Any]]:
-        url = f"{self._base_url}/wikis?api-version={self.api_version}"
-        print(f"DEBUG: list_wikis() URL: {url}")
-        data = self._request("GET", url)
+        url = f"{self._base_url}/wikis"
+        params = {"api-version": self.api_version}
+        print(f"DEBUG: list_wikis() URL: {url} Params: {params}")
+        data = self._request("GET", url, params=params)
         return data.get("value", [])
 
     def list_pages(self, wiki_identifier: str) -> List[Dict[str, Any]]:
-        url = (
-            f"{self._base_url}/wikis/{wiki_identifier}/pages"
-            f"?api-version={self.api_version}&recursionLevel=full"
-        )
+        url = f"{self._base_url}/wikis/{wiki_identifier}/pages"
+        params = {
+            "api-version": self.api_version,
+            "recursionLevel": "full"  # Capital 'L'!
+        }
         print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}")
-        print(f"DEBUG: Full URL: {url}")
-        data = self._request("GET", url)
+        print(f"DEBUG: Full URL: {url} Params: {params}")
+        data = self._request("GET", url, params=params)
+        print(f"DEBUG: Pages returned: {len(data.get('value', []))}")
         return data.get("value", [])
 
     def get_page_content(
@@ -82,7 +87,8 @@ class AzureDevOpsWikiTool:
         }
         if page_path is not None:
             encoded_path = quote(page_path, safe="/")
-            url = f"{self._base_url}/wikis/{wiki_identifier}/pages?path={encoded_path}"
+            url = f"{self._base_url}/wikis/{wiki_identifier}/pages"
+            params["path"] = encoded_path
         else:
             url = f"{self._base_url}/wikis/{wiki_identifier}/pages/{page_id}"
         data = self._request("GET", url, params=params)
