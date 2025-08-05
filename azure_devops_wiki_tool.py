@@ -41,7 +41,6 @@ class AzureDevOpsWikiTool:
         try:
             response = requests.request(method, url, headers=merged_headers, **kwargs)
             print(f"DEBUG: Response status: {response.status_code}", file=sys.stderr)
-            # Only print up to 500 characters to avoid log spam
             print(f"DEBUG: Response content (first 500 chars): {response.text[:500]}", file=sys.stderr)
             response.raise_for_status()
             return response.json()
@@ -55,9 +54,14 @@ class AzureDevOpsWikiTool:
         data = self._request("GET", url)
         return data.get("value", [])
 
-    def list_pages(self, wiki_identifier: str) -> List[Dict[str, Any]]:
-        url = f"{self._base_url}/wikis/{wiki_identifier}/pages?api-version={self.api_version}"
-        print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}", file=sys.stderr)
+    def list_pages(self, wiki_identifier: str, branch: str = "master") -> List[Dict[str, Any]]:
+        url = (
+            f"{self._base_url}/wikis/{wiki_identifier}/pages"
+            f"?versionDescriptor.version={branch}"
+            f"&versionDescriptor.versionType=branch"
+            f"&api-version={self.api_version}"
+        )
+        print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}, branch: {branch}", file=sys.stderr)
         print(f"DEBUG: Full URL: {url}", file=sys.stderr)
         data = self._request("GET", url)
         return data.get("value", [])
@@ -68,23 +72,29 @@ class AzureDevOpsWikiTool:
         *,
         page_path: Optional[str] = None,
         page_id: Optional[int] = None,
+        branch: str = "master"
     ) -> Optional[str]:
         if (page_path is None and page_id is None) or (page_path and page_id):
             raise ValueError(
                 "Exactly one of page_path or page_id must be supplied to get_page_content"
             )
-        params = {"includeContent": "true", "api-version": self.api_version}
+        params = {
+            "includeContent": "true",
+            "api-version": self.api_version,
+            "versionDescriptor.version": branch,
+            "versionDescriptor.versionType": "branch"
+        }
         if page_path is not None:
             encoded_path = quote(page_path, safe="/")
             url = f"{self._base_url}/wikis/{wiki_identifier}/pages?path={encoded_path}"
         else:
             url = f"{self._base_url}/wikis/{wiki_identifier}/pages/{page_id}"
-        print(f"DEBUG: get_page_content() URL: {url}", file=sys.stderr)
+        print(f"DEBUG: get_page_content() URL: {url} branch: {branch}", file=sys.stderr)
         data = self._request("GET", url, params=params)
         return data.get("content")
 
-    def crawl_wiki(self, wiki_identifier: str) -> List[Dict[str, Any]]:
-        pages = self.list_pages(wiki_identifier)
+    def crawl_wiki(self, wiki_identifier: str, branch: str = "master") -> List[Dict[str, Any]]:
+        pages = self.list_pages(wiki_identifier, branch=branch)
         results: List[Dict[str, Any]] = []
         for page in pages:
             path = page.get("path")
@@ -92,7 +102,7 @@ class AzureDevOpsWikiTool:
                 continue
             try:
                 content = self.get_page_content(
-                    wiki_identifier, page_path=path
+                    wiki_identifier, page_path=path, branch=branch
                 )
                 results.append({"path": path, "content": content})
             except Exception as exc:
