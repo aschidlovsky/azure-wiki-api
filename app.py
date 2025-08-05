@@ -1,4 +1,5 @@
 import os
+
 from flask import Flask, request, jsonify
 from azure_devops_wiki_tool import AzureDevOpsWikiTool
 
@@ -56,9 +57,6 @@ def search_route():
         if lower in content.lower():
             matches.append({"path": page.get("path"), "snippet": content[:250]})
     return jsonify(matches)
-
 if __name__ == "__main__":
-
-    
     port = int(os.environ.get("PORT", 8000))
-        app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
