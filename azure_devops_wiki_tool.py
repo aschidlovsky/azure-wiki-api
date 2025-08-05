@@ -10,7 +10,7 @@ class AzureDevOpsWikiTool:
         org: Optional[str] = None,
         project: Optional[str] = None,
         pat: Optional[str] = None,
-        api_version: str = "7.1-preview.2",
+        api_version: str = "7.1-preview.1",  # CHANGED HERE
     ) -> None:
         self.org = org or os.getenv("AZURE_DEVOPS_ORG")
         self.project = project or os.getenv("AZURE_DEVOPS_PROJECT")
@@ -56,7 +56,6 @@ class AzureDevOpsWikiTool:
         return data.get("value", [])
 
     def list_pages(self, wiki_identifier: str) -> List[Dict[str, Any]]:
-        # recursionLevel=full for all pages
         url = (
             f"{self._base_url}/wikis/{wiki_identifier}/pages"
             f"?api-version={self.api_version}&recursionLevel=full"
@@ -110,4 +109,3 @@ class AzureDevOpsWikiTool:
                     }
                 )
         return results
-
