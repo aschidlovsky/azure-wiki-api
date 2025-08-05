@@ -58,5 +58,7 @@ def search_route():
     return jsonify(matches)
 
 if __name__ == "__main__":
-    # Run the Flask app on port 8000
-    app.run(host="0.0.0.0", port=8000)
+
+    
+    port = int(os.environ.get("PORT", 8000))
+        app.run(host="0.0.0.0", port=port)
