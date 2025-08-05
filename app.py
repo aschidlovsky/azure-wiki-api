@@ -11,6 +11,10 @@ wiki_tool = AzureDevOpsWikiTool(
     pat=os.environ["AZURE_DEVOPS_PAT"],
 )
 
+@app.route("/", methods=["GET"])
+def index():
+    return "OK", 200
+
 @app.route("/wikis", methods=["GET"])
 def list_wikis():
     """List all wikis in the configured Azure DevOps project"""
