@@ -36,11 +36,12 @@ def list_wikis():
 @app.route("/pages", methods=["GET"])
 def list_pages_route():
     wiki = request.args.get("wiki")
-    print(f"DEBUG: /pages endpoint called with wiki param: {wiki}", file=sys.stderr)
+    branch = request.args.get("branch", "master")
+    print(f"DEBUG: /pages endpoint called with wiki param: {wiki} and branch: {branch}", file=sys.stderr)
     if not wiki:
         return jsonify({"error": "wiki param required"}), 400
     try:
-        pages = wiki_tool.list_pages(wiki)
+        pages = wiki_tool.list_pages(wiki, branch=branch)
         return jsonify([
             {"path": page.get("path"), "id": page.get("id"), "order": page.get("order")}
             for page in pages
@@ -56,18 +57,19 @@ def get_page():
     wiki = request.args.get("wiki")
     page_path = request.args.get("path")
     page_id = request.args.get("id")
+    branch = request.args.get("branch", "master")
     if not wiki or (not page_path and not page_id):
         return jsonify({"error": "wiki and (path or id) param required"}), 400
     try:
         if page_path:
-            content = wiki_tool.get_page_content(wiki_identifier=wiki, page_path=page_path)
+            content = wiki_tool.get_page_content(wiki_identifier=wiki, page_path=page_path, branch=branch)
             return jsonify({"content": content})
         else:
             try:
                 id_int = int(page_id)
             except (TypeError, ValueError):
                 return jsonify({"error": "id must be an integer"}), 400
-            content = wiki_tool.get_page_content(wiki_identifier=wiki, page_id=id_int)
+            content = wiki_tool.get_page_content(wiki_identifier=wiki, page_id=id_int, branch=branch)
             return jsonify({"content": content})
     except requests.HTTPError as e:
         error_body = e.response.text[:1000] if hasattr(e.response, "text") else ""
@@ -79,12 +81,13 @@ def get_page():
 def search_route():
     wiki = request.args.get("wiki")
     keyword = request.args.get("q")
+    branch = request.args.get("branch", "master")
     limit = min(int(request.args.get("limit", 10)), 50)  # Hard cap at 50 results
-    print(f"DEBUG: /search endpoint called with wiki param: {wiki} and keyword: {keyword}", file=sys.stderr)
+    print(f"DEBUG: /search endpoint called with wiki param: {wiki}, keyword: {keyword}, branch: {branch}", file=sys.stderr)
     if not wiki or not keyword:
         return jsonify({"error": "wiki and q param required"}), 400
     try:
-        pages = wiki_tool.crawl_wiki(wiki)
+        pages = wiki_tool.crawl_wiki(wiki, branch=branch)
         matches = []
         lower = keyword.lower()
         for page in pages:
@@ -100,7 +103,6 @@ def search_route():
     except Exception as e:
         return jsonify({"error": "Unhandled error", "detail": str(e)}), 500
 
-# Optional: for debugging your environment
 @app.route("/debug-env")
 def debug_env():
     return jsonify({
@@ -112,3 +114,4 @@ def debug_env():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
+
