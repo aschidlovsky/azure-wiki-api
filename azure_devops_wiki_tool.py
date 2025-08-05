@@ -3,7 +3,6 @@ import os
 from typing import List, Dict, Optional, Any
 import requests
 from urllib.parse import quote
-import sys
 
 class AzureDevOpsWikiTool:
     def __init__(
@@ -20,13 +19,14 @@ class AzureDevOpsWikiTool:
 
         if not self.org or not self.project or not self.pat:
             raise ValueError(
-                "Organization, project, and PAT must all be provided either via parameters or environment variables"
+                "Organization, project, and PAT must all be provided via parameters or environment variables"
             )
 
         pat_bytes = f":{self.pat}".encode()
         self._headers = {
             "Authorization": "Basic " + base64.b64encode(pat_bytes).decode(),
         }
+
         self._base_url = (
             f"https://dev.azure.com/{self.org}/{self.project}/_apis/wiki"
         )
@@ -34,29 +34,35 @@ class AzureDevOpsWikiTool:
     def _request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         headers = kwargs.pop("headers", {})
         merged_headers = {**self._headers, **headers}
-        print(f"DEBUG: Calling Azure DevOps URL: {url}", file=sys.stderr)
-        print(f"DEBUG: Method: {method}", file=sys.stderr)
-        print(f"DEBUG: Org: {self.org}, Project: {self.project}, PAT Set: {bool(self.pat)}", file=sys.stderr)
+        print(f"DEBUG: Calling Azure DevOps URL: {url}")
+        print(f"DEBUG: Method: {method}")
+        print(f"DEBUG: Org: {self.org}, Project: {self.project}, PAT Set: {bool(self.pat)}")
+        response = requests.request(method, url, headers=merged_headers, **kwargs)
+        print(f"DEBUG: Response status: {response.status_code}")
+        if response.status_code != 200:
+            print("DEBUG: Response content (first 500 chars):", response.text[:500])
+        response.raise_for_status()
         try:
-            response = requests.request(method, url, headers=merged_headers, **kwargs)
-            print(f"DEBUG: Response status: {response.status_code}", file=sys.stderr)
-            print(f"DEBUG: Response content (first 500 chars): {response.text[:500]}", file=sys.stderr)
-            response.raise_for_status()
             return response.json()
         except Exception as exc:
-            print(f"DEBUG: Exception: {exc}", file=sys.stderr)
-            raise
+            raise ValueError(
+                f"Expected JSON from {url}, but got: {response.text[:500]}"
+            ) from exc
 
     def list_wikis(self) -> List[Dict[str, Any]]:
         url = f"{self._base_url}/wikis?api-version={self.api_version}"
-        print(f"DEBUG: list_wikis() URL: {url}", file=sys.stderr)
+        print(f"DEBUG: list_wikis() URL: {url}")
         data = self._request("GET", url)
         return data.get("value", [])
 
     def list_pages(self, wiki_identifier: str) -> List[Dict[str, Any]]:
-        url = f"{self._base_url}/wikis/{wiki_identifier}/pages?api-version={self.api_version}"
-        print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}", file=sys.stderr)
-        print(f"DEBUG: Full URL: {url}", file=sys.stderr)
+        # recursionLevel=full for all pages
+        url = (
+            f"{self._base_url}/wikis/{wiki_identifier}/pages"
+            f"?api-version={self.api_version}&recursionLevel=full"
+        )
+        print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}")
+        print(f"DEBUG: Full URL: {url}")
         data = self._request("GET", url)
         return data.get("value", [])
 
@@ -71,13 +77,15 @@ class AzureDevOpsWikiTool:
             raise ValueError(
                 "Exactly one of page_path or page_id must be supplied to get_page_content"
             )
-        params = {"includeContent": "true", "api-version": self.api_version}
+        params = {
+            "includeContent": "true",
+            "api-version": self.api_version,
+        }
         if page_path is not None:
             encoded_path = quote(page_path, safe="/")
             url = f"{self._base_url}/wikis/{wiki_identifier}/pages?path={encoded_path}"
         else:
             url = f"{self._base_url}/wikis/{wiki_identifier}/pages/{page_id}"
-        print(f"DEBUG: get_page_content() URL: {url}", file=sys.stderr)
         data = self._request("GET", url, params=params)
         return data.get("content")
 
@@ -102,3 +110,4 @@ class AzureDevOpsWikiTool:
                     }
                 )
         return results
+
