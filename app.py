@@ -1,5 +1,10 @@
 import os
 
+print("Starting app...")
+print("ORG:", os.environ.get("AZURE_DEVOPS_ORG"))
+print("PROJECT:", os.environ.get("AZURE_DEVOPS_PROJECT"))
+print("PAT present:", bool(os.environ.get("AZURE_DEVOPS_PAT")))
+
 from flask import Flask, request, jsonify
 from azure_devops_wiki_tool import AzureDevOpsWikiTool
 
