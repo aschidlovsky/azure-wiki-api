@@ -59,10 +59,11 @@ class AzureDevOpsWikiTool:
         return data.get("value", [])
 
     def list_pages(self, wiki_identifier: str) -> List[Dict[str, Any]]:
+        wiki_identifier = wiki_identifier.lstrip("/").rstrip("/")
         url = f"{self._base_url}/wikis/{wiki_identifier}/pages"
         params = {
             "api-version": self.api_version,
-            "recursionLevel": "full"  # Capital 'L'!
+            "recursionLevel": "full"
         }
         print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}")
         print(f"DEBUG: Full URL: {url} Params: {params}")
@@ -77,10 +78,7 @@ class AzureDevOpsWikiTool:
         page_path: Optional[str] = None,
         page_id: Optional[int] = None,
     ) -> Optional[str]:
-        if (page_path is None and page_id is None) or (page_path and page_id):
-            raise ValueError(
-                "Exactly one of page_path or page_id must be supplied to get_page_content"
-            )
+        wiki_identifier = wiki_identifier.lstrip("/").rstrip("/")
         params = {
             "includeContent": "true",
             "api-version": self.api_version,
@@ -115,3 +113,4 @@ class AzureDevOpsWikiTool:
                     }
                 )
         return results
+
