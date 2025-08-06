@@ -25,6 +25,7 @@ class AzureDevOpsWikiTool:
         pat_bytes = f":{self.pat}".encode()
         self._headers = {
             "Authorization": "Basic " + base64.b64encode(pat_bytes).decode(),
+            "Accept": "application/json"
         }
 
         self._base_url = (
@@ -35,12 +36,9 @@ class AzureDevOpsWikiTool:
         headers = kwargs.pop("headers", {})
         merged_headers = {**self._headers, **headers}
         print(f"DEBUG: Calling Azure DevOps URL: {url}")
-        print(f"DEBUG: Method: {method}")
-        print(f"DEBUG: Org: {self.org}, Project: {self.project}, PAT Set: {bool(self.pat)}")
         response = requests.request(method, url, headers=merged_headers, **kwargs)
         print(f"DEBUG: Response status: {response.status_code}")
-        if response.status_code != 200:
-            print("DEBUG: Response content (first 500 chars):", response.text[:500])
+        print(f"DEBUG: Raw Response: {response.text[:1000]}")  # Log response
         response.raise_for_status()
         try:
             return response.json()
@@ -64,8 +62,13 @@ class AzureDevOpsWikiTool:
         print(f"DEBUG: list_pages() using wiki_identifier: {wiki_identifier}")
         print(f"DEBUG: Full URL: {url}")
         data = self._request("GET", url)
-        print(f"DEBUG: Pages returned: {len(data.get('value', []))}")
-        return data.get("value", [])
+        print(f"DEBUG: RAW RESPONSE JSON: {data}")
+        # Defensive: Accept both 'value' and 'pages' key for compatibility
+        result = data.get("value")
+        if result is None:
+            result = data.get("pages", [])
+        print(f"DEBUG: Pages returned: {len(result)}")
+        return result
 
     def get_page_content(
         self,
