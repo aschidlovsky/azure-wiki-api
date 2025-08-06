@@ -1,11 +1,11 @@
 import os
-import requests
-from flask import Flask, request, jsonify
 import logging
+from flask import Flask, request, jsonify
+import requests
+from base64 import b64encode
 
-# --- Logging config ---
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -14,7 +14,6 @@ AZURE_DEVOPS_PROJECT = os.getenv("AZURE_DEVOPS_PROJECT")
 AZURE_DEVOPS_PAT = os.getenv("AZURE_DEVOPS_PAT")
 
 def get_auth_header():
-    from base64 import b64encode
     pat_token = f":{AZURE_DEVOPS_PAT}".encode('utf-8')
     return {
         "Authorization": f"Basic {b64encode(pat_token).decode()}",
@@ -24,17 +23,13 @@ def get_auth_header():
 def az_base_url():
     return f"https://dev.azure.com/{AZURE_DEVOPS_ORG}/{AZURE_DEVOPS_PROJECT}/_apis"
 
-@app.before_request
-def log_request_info():
-    logger.info(f"Incoming request: {request.method} {request.path} | Args: {request.args.to_dict()} | JSON: {request.get_json(silent=True)}")
-
 @app.route('/wikis', methods=['GET'])
 def list_wikis():
     url = f"{az_base_url()}/wiki/wikis?api-version=7.1-preview.1"
     headers = get_auth_header()
-    logger.info(f"GET {url}")
+    logging.info(f"Requesting: {url}")
     resp = requests.get(url, headers=headers)
-    logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+    logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
     if resp.status_code != 200:
         return jsonify({"error": resp.text}), resp.status_code
     return jsonify(resp.json().get('value', [])), 200
@@ -43,14 +38,13 @@ def list_wikis():
 def list_pages():
     wiki_id = request.args.get("wiki")
     if not wiki_id:
-        logger.warning("Missing 'wiki' parameter")
         return jsonify({"error": "Missing 'wiki' parameter"}), 400
     url = f"{az_base_url()}/wiki/wikis/{wiki_id}/pages"
     params = {"api-version": "7.1-preview.1", "recursionLevel": "full"}
     headers = get_auth_header()
-    logger.info(f"GET {url} params={params}")
+    logging.info(f"Requesting: {url} params={params}")
     resp = requests.get(url, headers=headers, params=params)
-    logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+    logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
     if resp.status_code != 200:
         return jsonify({"error": resp.text}), resp.status_code
     return jsonify(resp.json()), 200
@@ -65,10 +59,8 @@ def page_ops():
     # --- GET ---
     if request.method == 'GET':
         if not wiki:
-            logger.warning("Missing 'wiki' parameter")
             return jsonify({"error": "Missing 'wiki' parameter"}), 400
         if not path and not page_id:
-            logger.warning("Provide 'path' or 'id'")
             return jsonify({"error": "Provide 'path' or 'id'"}), 400
         base = f"{az_base_url()}/wiki/wikis/{wiki}/pages"
         params = {"api-version": "7.1-preview.1"}
@@ -77,9 +69,9 @@ def page_ops():
         else:
             url = base
             params["path"] = path
-        logger.info(f"GET {url} params={params}")
+        logging.info(f"Requesting page: {url} params={params}")
         resp = requests.get(url, headers=headers, params=params)
-        logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+        logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
         if resp.status_code != 200:
             return jsonify({"error": resp.text}), resp.status_code
         return jsonify({"content": resp.json().get("content", "")}), 200
@@ -89,14 +81,13 @@ def page_ops():
         data = request.json
         content = data.get("content")
         if not (wiki and path and content):
-            logger.warning("wiki, path, and content required")
             return jsonify({"error": "wiki, path, and content required"}), 400
         url = f"{az_base_url()}/wiki/wikis/{wiki}/pages"
         params = {"api-version": "7.1-preview.1", "path": path}
         payload = {"content": content, "comment": data.get("comment", "Created via API")}
-        logger.info(f"PUT (Create) {url} params={params} payload={payload}")
+        logging.info(f"Creating page: {url} params={params} payload={payload}")
         resp = requests.put(url, headers=headers, params=params, json=payload)
-        logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+        logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
         if resp.status_code not in (200, 201):
             return jsonify({"error": resp.text}), resp.status_code
         return jsonify({"message": "Page created"}), 201
@@ -106,14 +97,13 @@ def page_ops():
         data = request.json
         content = data.get("content")
         if not (wiki and path and content):
-            logger.warning("wiki, path, and content required")
             return jsonify({"error": "wiki, path, and content required"}), 400
         url = f"{az_base_url()}/wiki/wikis/{wiki}/pages"
         params = {"api-version": "7.1-preview.1", "path": path}
         payload = {"content": content, "comment": data.get("comment", "Updated via API")}
-        logger.info(f"PUT (Update) {url} params={params} payload={payload}")
+        logging.info(f"Updating page: {url} params={params} payload={payload}")
         resp = requests.put(url, headers=headers, params=params, json=payload)
-        logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+        logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
         if resp.status_code not in (200, 201):
             return jsonify({"error": resp.text}), resp.status_code
         return jsonify({"message": "Page updated"}), 200
@@ -121,60 +111,70 @@ def page_ops():
     # --- DELETE ---
     if request.method == 'DELETE':
         if not (wiki and path):
-            logger.warning("wiki and path required")
             return jsonify({"error": "wiki and path required"}), 400
         url = f"{az_base_url()}/wiki/wikis/{wiki}/pages"
         params = {"api-version": "7.1-preview.1", "path": path}
-        logger.info(f"DELETE {url} params={params}")
+        logging.info(f"Deleting page: {url} params={params}")
         resp = requests.delete(url, headers=headers, params=params)
-        logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+        logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
         if resp.status_code != 204:
             return jsonify({"error": resp.text}), resp.status_code
         return jsonify({"message": "Page deleted"}), 204
 
-@app.route('/search', methods=['GET'])
+@app.route('/search', methods=['GET', 'POST'])
 def search_pages():
-    wiki = request.args.get("wiki")
-    query = request.args.get("q")
-    logger.info(f"/search called with wiki={wiki}, q={query}")
+    # Allow GET for backwards compatibility but recommend POST!
+    if request.method == 'POST':
+        data = request.json or {}
+        wiki = data.get("wiki")
+        query = data.get("q") or data.get("query") or data.get("searchText")
+    else:
+        wiki = request.args.get("wiki")
+        query = request.args.get("q")
+    logging.info(f"/search called with wiki={wiki}, q={query}")
+
     if not (wiki and query):
-        logger.warning("wiki and q required")
         return jsonify({"error": "wiki and q required"}), 400
-    url = f"{az_base_url()}/search/wikisearchresults"
+
+    # CORRECT endpoint and domain for search
+    url = f"https://almsearch.dev.azure.com/{AZURE_DEVOPS_ORG}/{AZURE_DEVOPS_PROJECT}/_apis/search/wikisearchresults"
+    params = {"api-version": "7.1", "project": AZURE_DEVOPS_PROJECT}
     headers = get_auth_header()
     payload = {
         "searchText": query,
-        "wikiId": wiki,
+        "wikiId": wiki
     }
-    params = {
-        "api-version": "7.1-preview.1",
-        "project": AZURE_DEVOPS_PROJECT
-    }
-    logger.info(f"POSTing search to: {url} params={params} payload={payload}")
+
+    logging.info(f"POSTing search to: {url} params={params} payload={payload}")
     resp = requests.post(url, headers=headers, params=params, json=payload)
-    logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+    logging.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
     if resp.status_code != 200:
         return jsonify({"error": resp.text}), resp.status_code
+
+    try:
+        data = resp.json()
+    except Exception as ex:
+        logging.exception("Failed to parse search response as JSON")
+        return jsonify({"error": "Failed to parse search response"}), 500
+
     results = []
-    for res in resp.json().get("results", []):
+    for res in data.get("results", []):
         results.append({
             "path": res.get("path"),
-            "snippet": res.get("highlights", [""])[0] if res.get("highlights") else ""
+            "snippet": (res.get("highlights") or [""])[0]
         })
-    logger.info(f"Returning {len(results)} search results")
     return jsonify(results), 200
 
 @app.route('/attachments', methods=['GET'])
 def list_attachments():
     wiki = request.args.get("wiki")
     if not wiki:
-        logger.warning("wiki required")
         return jsonify({"error": "wiki required"}), 400
     url = f"{az_base_url()}/wiki/wikis/{wiki}/attachments?api-version=7.1-preview.1"
     headers = get_auth_header()
-    logger.info(f"GET {url}")
+    logging.info(f"Requesting: {url}")
     resp = requests.get(url, headers=headers)
-    logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+    logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
     if resp.status_code != 200:
         return jsonify({"error": resp.text}), resp.status_code
     return jsonify(resp.json().get('value', [])), 200
@@ -184,18 +184,18 @@ def upload_attachment():
     wiki = request.form.get("wiki")
     file = request.files.get("file")
     if not wiki or not file:
-        logger.warning("wiki and file required")
         return jsonify({"error": "wiki and file required"}), 400
     url = f"{az_base_url()}/wiki/wikis/{wiki}/attachments?api-version=7.1-preview.1"
     headers = get_auth_header()
     headers.pop("Content-Type", None)
     files = {"file": (file.filename, file.stream, file.mimetype)}
-    logger.info(f"POST {url} files={file.filename}")
+    logging.info(f"Uploading attachment: {file.filename} to wiki {wiki}")
     resp = requests.post(url, headers=headers, files=files)
-    logger.info(f"Azure response [{resp.status_code}]: {resp.text[:500]}")
+    logging.info(f"Response [{resp.status_code}]: {resp.text[:300]}")
     if resp.status_code not in (200, 201):
         return jsonify({"error": resp.text}), resp.status_code
     return jsonify(resp.json()), 201
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.getenv("PORT", "8080")))
+
